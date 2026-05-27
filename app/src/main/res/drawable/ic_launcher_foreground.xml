@@ -1,0 +1,38 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    
+    <!-- Outer Shield Halo Ring -->
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#9ECAFF"
+        android:strokeWidth="3.5"
+        android:strokeLineJoin="round"
+        android:pathData="M 18,54 A 36,36 0 1,0 90,54 A 36,36 0 1,0 18,54" />
+
+    <!-- Shackle of the Security Key Padlock -->
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="6.5"
+        android:strokeLineCap="round"
+        android:pathData="M 38,48 V 36 A 16,16 0 0,1 70,36 V 48" />
+
+    <!-- Padlock Outer Armor Body -->
+    <path
+        android:fillColor="#EBF3FC"
+        android:pathData="M 28,48 H 80 A 6,6 0 0,1 86,54 V 78 A 6,6 0 0,1 80,84 H 28 A 6,6 0 0,1 22,78 V 54 A 6,6 0 0,1 28,48 Z" />
+
+    <!-- Technical Inner Blue Safe Seal -->
+    <path
+        android:fillColor="#0061A4"
+        android:pathData="M 34,54 H 74 A 2,2 0 0,1 76,56 V 74 A 2,2 0 0,1 74,76 H 34 A 2,2 0 0,1 32,74 V 56 A 2,2 0 0,1 34,54 Z" />
+
+    <!-- Padlock Keyhole Aperture -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M 54,60 A 4,4 0 0,0 50,64 C 50,66.2 51.5,68 53,69 M 57,69 C 58.5,68 60,66.2 60,64 A 4,4 0 0,0 56,60 Z M 53,69 V 74 H 55 V 69 H 53 Z" />
+
+</vector>

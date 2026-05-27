@@ -1,0 +1,8 @@
+{
+  "name": " LinkVault",
+  "description": "A secure, beautiful hyperlink manager featuring custom folders, tags, search, and numeric/9-dot pattern folder protection.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
