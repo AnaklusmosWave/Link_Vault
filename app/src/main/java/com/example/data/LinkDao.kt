@@ -46,4 +46,23 @@ interface LinkDao {
 
     @Query("DELETE FROM links WHERE folderId = :folderId")
     suspend fun deleteLinksByFolder(folderId: Long)
+
+    // Tag Queries
+    @Query("SELECT * FROM tags ORDER BY name ASC")
+    fun getAllTags(): Flow<List<TagEntity>>
+
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertTag(tag: TagEntity)
+
+    @Delete
+    suspend fun deleteTag(tag: TagEntity)
+
+    @Query("DELETE FROM folders")
+    suspend fun deleteAllFolders()
+
+    @Query("DELETE FROM links")
+    suspend fun deleteAllLinks()
+
+    @Query("DELETE FROM tags")
+    suspend fun deleteAllTags()
 }

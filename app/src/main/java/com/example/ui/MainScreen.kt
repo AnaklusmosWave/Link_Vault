@@ -13,6 +13,10 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.grid.LazyHorizontalGrid
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -23,6 +27,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
@@ -61,9 +66,21 @@ fun MainScreen(viewModel: LinkViewModel) {
     val searchQuery by viewModel.searchQuery.collectAsStateWithLifecycle()
     val selectedTag by viewModel.selectedTag.collectAsStateWithLifecycle()
     val unlockedFolderIds by viewModel.unlockedFolderIds.collectAsStateWithLifecycle()
+    val useRoundedCorners by viewModel.useRoundedCorners.collectAsStateWithLifecycle()
+    val showFoldersTab by viewModel.showFoldersTab.collectAsStateWithLifecycle()
+    val showTagsTab by viewModel.showTagsTab.collectAsStateWithLifecycle()
 
     // Active bottom navigation tab selection
     var currentTab by remember { mutableStateOf(MainTab.RECENT) }
+
+    LaunchedEffect(showFoldersTab, showTagsTab, currentTab) {
+        if (!showFoldersTab && currentTab == MainTab.FOLDERS) {
+            currentTab = MainTab.RECENT
+        }
+        if (!showTagsTab && currentTab == MainTab.TAGS) {
+            currentTab = MainTab.RECENT
+        }
+    }
 
     // Auto-locking when leaving folders
     var previousFolderId by remember { mutableStateOf(selectedFolderId) }
@@ -112,18 +129,21 @@ fun MainScreen(viewModel: LinkViewModel) {
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        // Dynamic minimal branding cube
+                        // Dynamic minimal branding cube matching the main app icon
+                        val brandingShape = if (useRoundedCorners) RoundedCornerShape(10.dp) else RoundedCornerShape(0.dp)
                         Box(
                             modifier = Modifier
                                 .size(36.dp)
-                                .background(MaterialTheme.colorScheme.primary, RoundedCornerShape(10.dp)),
+                                .background(MaterialTheme.colorScheme.primary, brandingShape),
                             contentAlignment = Alignment.Center
                         ) {
-                            Text(
-                                text = "L",
-                                color = MaterialTheme.colorScheme.onPrimary,
-                                fontSize = 18.sp,
-                                fontWeight = FontWeight.Bold
+                            Icon(
+                                imageVector = Icons.Default.Link,
+                                contentDescription = "LinkVault Logo",
+                                tint = MaterialTheme.colorScheme.onPrimary,
+                                modifier = Modifier
+                                    .size(22.dp)
+                                    .rotate(-45f)
                             )
                         }
 
@@ -178,12 +198,14 @@ fun MainScreen(viewModel: LinkViewModel) {
                 )
 
                 // 2. FOLDERS Tab
-                NavigationBarItem(
-                    selected = currentTab == MainTab.FOLDERS,
-                    onClick = { currentTab = MainTab.FOLDERS },
-                    icon = { Icon(imageVector = Icons.Default.Folder, contentDescription = "Folders") },
-                    label = { Text("資料夾", fontSize = 10.sp, fontWeight = FontWeight.Bold) }
-                )
+                if (showFoldersTab) {
+                    NavigationBarItem(
+                        selected = currentTab == MainTab.FOLDERS,
+                        onClick = { currentTab = MainTab.FOLDERS },
+                        icon = { Icon(imageVector = Icons.Default.Folder, contentDescription = "Folders") },
+                        label = { Text("資料夾", fontSize = 10.sp, fontWeight = FontWeight.Bold) }
+                    )
+                }
 
                 // 3. ADD LINK Action Button
                 NavigationBarItem(
@@ -208,12 +230,14 @@ fun MainScreen(viewModel: LinkViewModel) {
                 )
 
                 // 4. TAGS Tab
-                NavigationBarItem(
-                    selected = currentTab == MainTab.TAGS,
-                    onClick = { currentTab = MainTab.TAGS },
-                    icon = { Icon(imageVector = Icons.Default.Label, contentDescription = "Tags") },
-                    label = { Text("標籤", fontSize = 10.sp, fontWeight = FontWeight.Bold) }
-                )
+                if (showTagsTab) {
+                    NavigationBarItem(
+                        selected = currentTab == MainTab.TAGS,
+                        onClick = { currentTab = MainTab.TAGS },
+                        icon = { Icon(imageVector = Icons.Default.Label, contentDescription = "Tags") },
+                        label = { Text("標籤", fontSize = 10.sp, fontWeight = FontWeight.Bold) }
+                    )
+                }
 
                 // 5. SETTINGS Tab
                 NavigationBarItem(
@@ -244,7 +268,8 @@ fun MainScreen(viewModel: LinkViewModel) {
                             Toast.makeText(context, "連結已刪除🗑️", Toast.LENGTH_SHORT).show()
                         },
                         searchQuery = searchQuery,
-                        onSearchQueryChange = { q -> viewModel.searchQuery.value = q }
+                        onSearchQueryChange = { q -> viewModel.searchQuery.value = q },
+                        onAddLinkClick = { showAddLinkDialog = true }
                     )
                 }
                 MainTab.FOLDERS -> {
@@ -272,7 +297,8 @@ fun MainScreen(viewModel: LinkViewModel) {
                             folderLockTypeToUnlock = type
                             folderLockValToUnlock = value
                         },
-                        onSearchQueryChange = { q -> viewModel.searchQuery.value = q }
+                        onSearchQueryChange = { q -> viewModel.searchQuery.value = q },
+                        onAddLinkClick = { showAddLinkDialog = true }
                     )
                 }
                 MainTab.TAGS -> {
@@ -298,10 +324,15 @@ fun MainScreen(viewModel: LinkViewModel) {
                 }
                 MainTab.SETTINGS -> {
                     SettingsTabContent(
+                        viewModel = viewModel,
                         unlockedFolderIds = unlockedFolderIds,
                         onLockAllFolders = {
                             viewModel.unlockedFolderIds.value = emptySet()
                             Toast.makeText(context, "所有加密資料夾已重新進入安全上鎖狀態 🔒", Toast.LENGTH_SHORT).show()
+                        },
+                        onGenerateTestData = {
+                            viewModel.generateTestData()
+                            Toast.makeText(context, "已成功生成開發者測試用完整資料集！✨", Toast.LENGTH_SHORT).show()
                         },
                         context = context
                     )
@@ -338,6 +369,7 @@ fun MainScreen(viewModel: LinkViewModel) {
             folders = folders,
             linkToEdit = linkToEdit,
             allTags = tags,
+            defaultFolderId = selectedFolderId,
             onDismiss = {
                 showAddLinkDialog = false
                 linkToEdit = null
@@ -480,14 +512,18 @@ fun LinkItemCard(
     onOpenLink: (LinkEntity) -> Unit,
     onCopyLink: (LinkEntity) -> Unit,
     onEditLink: (LinkEntity) -> Unit,
-    onDeleteLink: (LinkEntity) -> Unit
+    onDeleteLink: (LinkEntity) -> Unit,
+    useRoundedCorners: Boolean = true
 ) {
+    val cardShape = if (useRoundedCorners) RoundedCornerShape(24.dp) else RoundedCornerShape(0.dp)
+    val badgeShape = if (useRoundedCorners) RoundedCornerShape(8.dp) else RoundedCornerShape(0.dp)
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .testTag("link_card_${link.id}")
-            .border(1.dp, MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(24.dp)),
-        shape = RoundedCornerShape(24.dp),
+            .border(1.dp, MaterialTheme.colorScheme.surfaceVariant, cardShape),
+        shape = cardShape,
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surface
         ),
@@ -498,53 +534,6 @@ fun LinkItemCard(
                 .fillMaxWidth()
                 .padding(18.dp)
         ) {
-            // Header Top line: Metadata tags / Selectable Note highlight Row
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                // Secondary tag marker or icon placeholder
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.08f))
-                            .padding(horizontal = 8.dp, vertical = 4.dp)
-                    ) {
-                        Text(
-                            text = "🏷️ CATEGORY",
-                            fontSize = 8.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.primary,
-                            letterSpacing = 0.5.sp
-                        )
-                    }
-                }
-
-                // Selectable Note Template Badge
-                if (link.note.isNotEmpty()) {
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(MaterialTheme.colorScheme.tertiary.copy(alpha = 0.08f))
-                            .padding(horizontal = 8.dp, vertical = 4.dp)
-                    ) {
-                        Text(
-                            text = link.note,
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.tertiary
-                        )
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(12.dp))
-
             // Brand information Row
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -578,29 +567,70 @@ fun LinkItemCard(
 
                 Spacer(modifier = Modifier.width(8.dp))
 
-                // Beautiful round decorative symbol badge on the right matching HTML mockup cards
-                val iconEmoji = remember(link.title, link.tags, link.note) {
-                    val combined = "${link.title} ${link.tags} ${link.note}".lowercase()
-                    when {
-                        combined.contains("design") || combined.contains("figma") || combined.contains("ui") || combined.contains("ux") || combined.contains("設計") || combined.contains("美學") -> "🎨"
-                        combined.contains("dev") || combined.contains("code") || combined.contains("git") || combined.contains("github") || combined.contains("開發") || combined.contains("程式") -> "💻"
-                        combined.contains("work") || combined.contains("office") || combined.contains("job") || combined.contains("工作") || combined.contains("任務") -> "💼"
-                        combined.contains("study") || combined.contains("learn") || combined.contains("school") || combined.contains("學習") || combined.contains("讀") || combined.contains("教學") -> "🎓"
-                        combined.contains("shop") || combined.contains("buy") || combined.contains("購物") || combined.contains("買") -> "🛍️"
-                        combined.contains("video") || combined.contains("movie") || combined.contains("youtube") || combined.contains("影") || combined.contains("片") -> "🎬"
-                        combined.contains("music") || combined.contains("song") || combined.contains("音") || combined.contains("歌") -> "🎵"
-                        combined.contains("security") || combined.contains("private") || combined.contains("lock") || combined.contains("密") -> "🔒"
-                        else -> "🔗"
-                    }
-                }
-
-                Box(
-                    modifier = Modifier
-                        .size(36.dp)
-                        .background(MaterialTheme.colorScheme.surfaceVariant, CircleShape),
-                    contentAlignment = Alignment.Center
+                // Control actions placed in top-right
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    Text(text = iconEmoji, fontSize = 16.sp)
+                    // Open Web Link (no background, no text, styled like the others)
+                    IconButton(
+                        onClick = { onOpenLink(link) },
+                        modifier = Modifier.size(32.dp),
+                        colors = IconButtonDefaults.iconButtonColors(
+                            contentColor = MaterialTheme.colorScheme.primary
+                        )
+                    ) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.OpenInNew,
+                            contentDescription = "Browse",
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+
+                    // Copy URL
+                    IconButton(
+                        onClick = { onCopyLink(link) },
+                        modifier = Modifier.size(32.dp),
+                        colors = IconButtonDefaults.iconButtonColors(
+                            contentColor = MaterialTheme.colorScheme.secondary
+                        )
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.ContentCopy,
+                            contentDescription = "Copy link",
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+
+                    // Edit
+                    IconButton(
+                        onClick = { onEditLink(link) },
+                        modifier = Modifier.size(32.dp),
+                        colors = IconButtonDefaults.iconButtonColors(
+                            contentColor = MaterialTheme.colorScheme.secondary
+                        )
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Edit,
+                            contentDescription = "Edit linkDetails",
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+
+                    // Delete
+                    IconButton(
+                        onClick = { onDeleteLink(link) },
+                        modifier = Modifier.size(32.dp),
+                        colors = IconButtonDefaults.iconButtonColors(
+                            contentColor = MaterialTheme.colorScheme.error.copy(alpha = 0.7f)
+                        )
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Delete,
+                            contentDescription = "Delete link",
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
                 }
             }
 
@@ -617,7 +647,7 @@ fun LinkItemCard(
                     tagList.forEach { tag ->
                         Box(
                             modifier = Modifier
-                                .clip(RoundedCornerShape(8.dp))
+                                .clip(badgeShape)
                                 .background(MaterialTheme.colorScheme.surfaceVariant)
                                 .padding(horizontal = 8.dp, vertical = 4.dp)
                         ) {
@@ -661,16 +691,17 @@ fun LinkItemCard(
             HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f))
             Spacer(modifier = Modifier.height(10.dp))
 
-            // Bottom controls row: folder name label (left) & utility actions buttons (right)
+            // Bottom controls row showing only folder label
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
+                horizontalArrangement = Arrangement.Start,
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 // Folder placement location tag
+                val folderBadgeShape = if (useRoundedCorners) RoundedCornerShape(8.dp) else RoundedCornerShape(0.dp)
                 Box(
                     modifier = Modifier
-                        .clip(RoundedCornerShape(8.dp))
+                        .clip(folderBadgeShape)
                         .background(MaterialTheme.colorScheme.secondary.copy(alpha = 0.08f))
                         .padding(horizontal = 8.dp, vertical = 4.dp)
                 ) {
@@ -680,79 +711,6 @@ fun LinkItemCard(
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.secondary
                     )
-                }
-
-                // Control actions
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    // Copy URL
-                    IconButton(
-                        onClick = { onCopyLink(link) },
-                        modifier = Modifier.size(32.dp),
-                        colors = IconButtonDefaults.iconButtonColors(
-                            contentColor = MaterialTheme.colorScheme.secondary
-                        )
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.ContentCopy,
-                            contentDescription = "Copy link",
-                            modifier = Modifier.size(14.dp)
-                        )
-                    }
-
-                    // Edit
-                    IconButton(
-                        onClick = { onEditLink(link) },
-                        modifier = Modifier.size(32.dp),
-                        colors = IconButtonDefaults.iconButtonColors(
-                            contentColor = MaterialTheme.colorScheme.secondary
-                        )
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Edit,
-                            contentDescription = "Edit linkDetails",
-                            modifier = Modifier.size(14.dp)
-                        )
-                    }
-
-                    // Delete
-                    IconButton(
-                        onClick = { onDeleteLink(link) },
-                        modifier = Modifier.size(32.dp),
-                        colors = IconButtonDefaults.iconButtonColors(
-                            contentColor = MaterialTheme.colorScheme.error.copy(alpha = 0.7f)
-                        )
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Delete,
-                            contentDescription = "Delete link",
-                            modifier = Modifier.size(14.dp)
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.width(4.dp))
-
-                    // Open Web Link
-                    Button(
-                        onClick = { onOpenLink(link) },
-                        shape = RoundedCornerShape(12.dp),
-                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
-                        modifier = Modifier.height(28.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.primary,
-                            contentColor = MaterialTheme.colorScheme.onPrimary
-                        )
-                    ) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.OpenInNew,
-                            contentDescription = "Browse",
-                            modifier = Modifier.size(12.dp)
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text("開啟", fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                    }
                 }
             }
         }
@@ -765,7 +723,8 @@ fun LinkItemCard(
 @Composable
 fun LockedFolderMessage(
     folderName: String,
-    onUnlockClicked: () -> Unit
+    onUnlockClicked: () -> Unit,
+    onBackClicked: (() -> Unit)? = null
 ) {
     Column(
         modifier = Modifier
@@ -803,6 +762,19 @@ fun LockedFolderMessage(
             Icon(imageVector = Icons.Default.LockOpen, contentDescription = "Unlock icon")
             Spacer(modifier = Modifier.width(6.dp))
             Text("安全密碼解鎖", fontWeight = FontWeight.Bold)
+        }
+
+        if (onBackClicked != null) {
+            Spacer(modifier = Modifier.height(12.dp))
+            OutlinedButton(
+                onClick = onBackClicked,
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier.testTag("back_from_locked_folder_button")
+            ) {
+                Icon(imageVector = Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                Spacer(modifier = Modifier.width(6.dp))
+                Text("返回上一層", fontWeight = FontWeight.Bold)
+            }
         }
     }
 }
@@ -880,6 +852,8 @@ fun EmptyLinksState(
 fun AddEditLinkDialog(
     folders: List<FolderEntity>,
     linkToEdit: LinkEntity?,
+    allTags: List<String>,
+    defaultFolderId: Long = 0L,
     onDismiss: () -> Unit,
     onSave: (folderId: Long, title: String, url: String, note: String, tags: String) -> Unit
 ) {
@@ -889,22 +863,26 @@ fun AddEditLinkDialog(
     var tagsStr by remember { mutableStateOf(linkToEdit?.tags ?: "") }
 
     var selectedFolderId by remember {
-        mutableStateOf(linkToEdit?.folderId ?: folders.firstOrNull()?.id ?: 0L)
+        mutableStateOf(
+            linkToEdit?.folderId ?: if (defaultFolderId != 0L) defaultFolderId else (folders.firstOrNull()?.id ?: 0L)
+        )
     }
 
     var dropdownExpanded by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf("") }
 
-    // Predefined selectable note options
-    val notePresets = listOf(
-        "★ 重要珍藏",
-        "⏳ 待讀教學",
-        "💡 靈感筆記",
-        "💼 工作任務",
-        "🛍️ 購物口袋",
-        "🏠 個人生活",
-        "✨ 優質推薦"
-    )
+    val currentTags = remember(tagsStr) {
+        tagsStr.split(",").map { it.trim() }.filter { it.isNotEmpty() }.toSet()
+    }
+
+    val onTagToggle: (String) -> Unit = { tag ->
+        val updated = if (currentTags.contains(tag)) {
+            currentTags - tag
+        } else {
+            currentTags + tag
+        }
+        tagsStr = updated.joinToString(", ")
+    }
 
     Dialog(onDismissRequest = onDismiss) {
         Card(
@@ -999,74 +977,67 @@ fun AddEditLinkDialog(
                     }
                 }
 
-                // Selectable Note Field (選擇式註記)
+                // Custom Note Field
                 item {
-                    Text(
-                        text = "選擇式備註註記：",
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-
-                    Spacer(modifier = Modifier.height(4.dp))
-
-                    // Flow of optional notes
-                    FlowRow(
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                        verticalArrangement = Arrangement.spacedBy(4.dp),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        notePresets.forEach { preset ->
-                            val isSelected = note == preset
-                            Box(
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .background(
-                                        if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
-                                        else MaterialTheme.colorScheme.surfaceVariant
-                                    )
-                                    .border(
-                                        1.dp,
-                                        if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent,
-                                        RoundedCornerShape(8.dp)
-                                    )
-                                    .clickable {
-                                        // Auto-paste or clear
-                                        note = if (isSelected) "" else preset
-                                    }
-                                    .padding(horizontal = 8.dp, vertical = 6.dp)
-                            ) {
-                                Text(
-                                    text = preset,
-                                    fontSize = 11.sp,
-                                    color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(10.dp))
-
                     OutlinedTextField(
                         value = note,
                         onValueChange = { note = it },
-                        label = { Text("自訂備註說明...") },
+                        label = { Text("自訂備註說明 (選填)") },
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(12.dp)
                     )
                 }
 
-                // Tags input
+                // Modern Tag Selection & Input
                 item {
-                    OutlinedTextField(
-                        value = tagsStr,
-                        onValueChange = { tagsStr = it },
-                        label = { Text("標籤分類 (以半形逗點區分，如: 旅遊,工具)") },
-                        placeholder = { Text("開發,學習,書籤") },
+                    Column(
                         modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp)
-                    )
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Text(
+                            text = "分類標籤：",
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+
+                        if (allTags.isNotEmpty()) {
+                            Text(
+                                text = "快速點選現有標籤 (可複選)：",
+                                fontSize = 12.sp,
+                                color = MaterialTheme.colorScheme.outline
+                            )
+
+                            FlowRow(
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                verticalArrangement = Arrangement.spacedBy(4.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                allTags.forEach { tag ->
+                                    val isSelected = currentTags.contains(tag)
+                                    FilterChip(
+                                        selected = isSelected,
+                                        onClick = { onTagToggle(tag) },
+                                        label = { Text(tag) },
+                                        shape = RoundedCornerShape(8.dp),
+                                        colors = FilterChipDefaults.filterChipColors(
+                                            selectedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
+                                            selectedLabelColor = MaterialTheme.colorScheme.primary
+                                        )
+                                    )
+                                }
+                            }
+                        }
+
+                        OutlinedTextField(
+                            value = tagsStr,
+                            onValueChange = { tagsStr = it },
+                            label = { Text("自訂或編輯標籤 (以半形逗點區隔)") },
+                            placeholder = { Text("例如: 工具, 學習") },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp)
+                        )
+                    }
                 }
 
                 if (errorMessage.isNotEmpty()) {
@@ -1338,8 +1309,11 @@ fun RecentTabContent(
     onEditLink: (LinkEntity) -> Unit,
     onDeleteLink: (LinkEntity) -> Unit,
     searchQuery: String,
-    onSearchQueryChange: (String) -> Unit
+    onSearchQueryChange: (String) -> Unit,
+    onAddLinkClick: () -> Unit
 ) {
+    val useRoundedCorners by viewModel.useRoundedCorners.collectAsStateWithLifecycle()
+
     // 1. Get non-locked folders set
     val nonLockedFolderIds = remember(folders) {
         folders.filter { !it.isLocked }.map { it.id }.toSet()
@@ -1364,23 +1338,6 @@ fun RecentTabContent(
             .fillMaxSize()
             .padding(horizontal = 16.dp)
     ) {
-        Spacer(modifier = Modifier.height(8.dp))
-
-        Text(
-            text = "LATEST ACTIVITY 軌跡",
-            fontWeight = FontWeight.Bold,
-            fontSize = 11.sp,
-            color = MaterialTheme.colorScheme.secondary,
-            letterSpacing = 1.sp
-        )
-        Text(
-            text = "最近新增收藏 (不含已加密安全內容)",
-            fontSize = 15.sp,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.onBackground,
-            modifier = Modifier.padding(vertical = 4.dp)
-        )
-
         Spacer(modifier = Modifier.height(8.dp))
 
         // Search pill field specifically for Recent links
@@ -1428,7 +1385,7 @@ fun RecentTabContent(
             if (recentLinks.isEmpty()) {
                 EmptyLinksState(
                     isSearchResult = searchQuery.isNotEmpty(),
-                    onCreateClicked = {}
+                    onCreateClicked = onAddLinkClick
                 )
             } else {
                 LazyColumn(
@@ -1438,7 +1395,7 @@ fun RecentTabContent(
                 ) {
                     items(recentLinks, key = { it.id }) { link ->
                         val folderObj = folders.find { it.id == link.folderId }
-                        val folderLabel = folderObj?.name ?: "未分類"
+                        val folderLabel = folderObj?.name ?: "無分類"
 
                         LinkItemCard(
                             link = link,
@@ -1449,7 +1406,8 @@ fun RecentTabContent(
                                 Toast.makeText(context, "已複製 URL 連結 📋", Toast.LENGTH_SHORT).show()
                             },
                             onEditLink = onEditLink,
-                            onDeleteLink = onDeleteLink
+                            onDeleteLink = onDeleteLink,
+                            useRoundedCorners = useRoundedCorners
                         )
                     }
                 }
@@ -1458,6 +1416,7 @@ fun RecentTabContent(
     }
 }
 
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 fun FoldersTabContent(
     folders: List<FolderEntity>,
@@ -1475,225 +1434,335 @@ fun FoldersTabContent(
     onEditLink: (LinkEntity) -> Unit,
     onDeleteLink: (LinkEntity) -> Unit,
     onUnlockRequest: (folderId: Long, name: String, type: String, value: String) -> Unit,
-    onSearchQueryChange: (String) -> Unit
+    onSearchQueryChange: (String) -> Unit,
+    onAddLinkClick: () -> Unit
 ) {
-    val currentFolder = folders.find { it.id == selectedFolderId }
-    val isCurrentFolderLockedAndNotAuth = currentFolder != null &&
-            currentFolder.isLocked &&
-            !unlockedFolderIds.contains(currentFolder.id)
+    val useRoundedCorners by viewModel.useRoundedCorners.collectAsStateWithLifecycle()
+    val shape16 = if (useRoundedCorners) RoundedCornerShape(16.dp) else RoundedCornerShape(0.dp)
+    val shape12 = if (useRoundedCorners) RoundedCornerShape(12.dp) else RoundedCornerShape(0.dp)
+    val shape8 = if (useRoundedCorners) RoundedCornerShape(8.dp) else RoundedCornerShape(0.dp)
 
-    Column(modifier = Modifier.fillMaxSize()) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 4.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = "COLLECTIONS",
-                fontWeight = FontWeight.Bold,
-                fontSize = 11.sp,
-                color = MaterialTheme.colorScheme.secondary,
-                letterSpacing = 1.sp
-            )
-
-            TextButton(
-                onClick = onAddFolderDialog,
-                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
-                colors = ButtonDefaults.textButtonColors(
-                    contentColor = MaterialTheme.colorScheme.primary
-                )
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Add,
-                    contentDescription = "Add folder",
-                    modifier = Modifier.size(14.dp)
-                )
-                Spacer(modifier = Modifier.width(4.dp))
-                Text("新增分類", fontSize = 11.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = 0.5.sp)
-            }
+    val allDbLinks by viewModel.allLinks.collectAsStateWithLifecycle()
+    val folderTags = remember(allDbLinks, selectedFolderId) {
+        if (selectedFolderId == 0L) {
+            emptyList()
+        } else {
+            allDbLinks.filter { it.folderId == selectedFolderId }
+                .flatMap { link ->
+                    link.tags.split(",").map { it.trim() }.filter { it.isNotEmpty() }
+                }.distinct().sorted()
         }
+    }
 
-        // Slider of folders
-        LazyRow(
-            contentPadding = PaddingValues(horizontal = 16.dp),
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            item {
-                val isSelected = selectedFolderId == 0L
-                FolderCapsule(
-                    name = "📦 全部連結",
-                    isSelected = isSelected,
-                    isLocked = false,
-                    isUnlocked = true,
-                    onClick = { viewModel.selectFolder(0L) },
-                    onLongClick = {}
+    if (selectedFolderId == 0L) {
+        // --- 1. ROOT VIEW: Displays list of directories like computer file explorer ---
+        Column(modifier = Modifier.fillMaxSize()) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "📂 根目錄 (資料夾列表)",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onBackground
                 )
+
+                TextButton(
+                    onClick = onAddFolderDialog,
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Add,
+                        contentDescription = "Add folder",
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("新增資料夾", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                }
             }
 
-            items(folders) { folder ->
-                val isSelected = selectedFolderId == folder.id
-                val isLocked = folder.isLocked
-                val isUnlocked = unlockedFolderIds.contains(folder.id)
+            Spacer(modifier = Modifier.height(4.dp))
 
-                FolderCapsule(
-                    name = folder.name,
-                    isSelected = isSelected,
-                    isLocked = isLocked,
-                    isUnlocked = isUnlocked,
-                    onClick = {
-                        if (isLocked && !isUnlocked) {
-                            onUnlockRequest(folder.id, folder.name, folder.lockType, folder.lockValue)
-                        } else {
-                            viewModel.selectFolder(folder.id)
+            if (folders.isEmpty()) {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text("📁 沒有任何資料夾", color = MaterialTheme.colorScheme.outline)
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Button(onClick = onAddFolderDialog) {
+                            Text("新增第一個資料夾")
                         }
-                    },
-                    onLongClick = { onEditFolder(folder) }
-                )
-            }
-        }
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        // Search Bar specifically in folders tab to find folder items
-        OutlinedTextField(
-            value = searchQuery,
-            onValueChange = onSearchQueryChange,
-            placeholder = { Text("搜尋此資料夾內的連結...") },
-            leadingIcon = {
-                Icon(
-                    imageVector = Icons.Default.Search,
-                    contentDescription = "Search icon"
-                )
-            },
-            trailingIcon = {
-                if (searchQuery.isNotEmpty()) {
-                    IconButton(onClick = { onSearchQueryChange("") }) {
-                        Icon(
-                            imageVector = Icons.Default.Clear,
-                            contentDescription = "Clear search"
-                        )
                     }
                 }
-            },
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp)
-                .testTag("search_field_folder"),
-            shape = RoundedCornerShape(16.dp),
-            colors = OutlinedTextFieldDefaults.colors(
-                focusedContainerColor = MaterialTheme.colorScheme.surface,
-                unfocusedContainerColor = MaterialTheme.colorScheme.surface,
-                focusedBorderColor = MaterialTheme.colorScheme.primary,
-                unfocusedBorderColor = MaterialTheme.colorScheme.surfaceVariant
-            ),
-            singleLine = true
-        )
-
-        Spacer(modifier = Modifier.height(10.dp))
-
-        // Tag Slider (Only show tags active under current folder)
-        if (tags.isNotEmpty()) {
-            Text(
-                text = "TAG FILTERS",
-                fontWeight = FontWeight.Bold,
-                fontSize = 11.sp,
-                color = MaterialTheme.colorScheme.secondary,
-                letterSpacing = 1.sp,
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
-            )
-
-            LazyRow(
-                contentPadding = PaddingValues(horizontal = 16.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                item {
-                    FilterChip(
-                        selected = selectedTag == null,
-                        onClick = { viewModel.selectTag(null) },
-                        label = { Text("全部標籤") },
-                        shape = RoundedCornerShape(12.dp)
-                    )
-                }
-
-                items(tags) { tag ->
-                    FilterChip(
-                        selected = selectedTag == tag,
-                        onClick = { viewModel.selectTag(tag) },
-                        label = { Text("# $tag") },
-                        shape = RoundedCornerShape(12.dp),
-                        colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
-                            selectedLabelColor = MaterialTheme.colorScheme.primary
-                        )
-                    )
-                }
-            }
-            Spacer(modifier = Modifier.height(8.dp))
-        }
-
-        HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
-
-        // Main display body
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .weight(1f)
-        ) {
-            if (isCurrentFolderLockedAndNotAuth) {
-                LockedFolderMessage(
-                    folderName = currentFolder?.name ?: "已加密資料夾",
-                    onUnlockClicked = {
-                        onUnlockRequest(
-                            currentFolder?.id ?: 0L,
-                            currentFolder?.name ?: "已加密資料夾",
-                            currentFolder?.lockType ?: "PIN",
-                            currentFolder?.lockValue ?: ""
-                        )
-                    }
-                )
-            } else if (links.isEmpty()) {
-                EmptyLinksState(
-                    isSearchResult = searchQuery.isNotEmpty() || selectedTag != null,
-                    onCreateClicked = {}
-                )
             } else {
                 LazyColumn(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .testTag("links_list"),
                     contentPadding = PaddingValues(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    modifier = Modifier.fillMaxSize()
                 ) {
-                    item {
-                        Text(
-                            text = "COLLECTION ENTRIES",
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 11.sp,
-                            color = MaterialTheme.colorScheme.secondary,
-                            letterSpacing = 1.sp,
-                            modifier = Modifier.padding(bottom = 6.dp)
-                        )
+                    items(folders) { folder ->
+                        val isLocked = folder.isLocked
+                        val isUnlocked = unlockedFolderIds.contains(folder.id)
+                        val folderLinksCount = viewModel.allLinks.value.count { it.folderId == folder.id }
+
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .combinedClickable(
+                                    onClick = {
+                                        if (isLocked && !isUnlocked) {
+                                            onUnlockRequest(folder.id, folder.name, folder.lockType, folder.lockValue)
+                                        } else {
+                                            viewModel.selectFolder(folder.id)
+                                        }
+                                    },
+                                    onLongClick = { onEditFolder(folder) }
+                                ),
+                            shape = shape16,
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                            ),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.surfaceVariant)
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(16.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                // Folder visual representation (computer directory icon style)
+                                Box(
+                                    modifier = Modifier
+                                        .size(48.dp)
+                                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.1f), CircleShape),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = if (isLocked && !isUnlocked) "🔒" else "📁",
+                                        fontSize = 22.sp
+                                    )
+                                }
+
+                                Spacer(modifier = Modifier.width(16.dp))
+
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = folder.name,
+                                        fontSize = 16.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text(
+                                        text = "$folderLinksCount 個項目",
+                                        fontSize = 12.sp,
+                                        color = MaterialTheme.colorScheme.outline
+                                    )
+                                }
+
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    if (isLocked) {
+                                        Icon(
+                                            imageVector = if (isUnlocked) Icons.Default.LockOpen else Icons.Default.Lock,
+                                            contentDescription = "🔒 Secure",
+                                            tint = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                    }
+                                    IconButton(onClick = { onEditFolder(folder) }) {
+                                        Icon(
+                                            imageVector = Icons.Default.Edit,
+                                            contentDescription = "Edit Folder",
+                                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    }
+                                }
+                            }
+                        }
                     }
+                }
+            }
+        }
+    } else {
+        // --- 2. INSIDE FOLDER VIEW: Drilled down view of the actual folder ---
+        val currentFolder = folders.find { it.id == selectedFolderId }
+        val isCurrentFolderLockedAndNotAuth = currentFolder != null &&
+                currentFolder.isLocked &&
+                !unlockedFolderIds.contains(currentFolder.id)
 
-                    items(links, key = { it.id }) { link ->
-                        val folderObj = folders.find { it.id == link.folderId }
-                        val folderLabel = folderObj?.name ?: "未分類"
+        Column(modifier = Modifier.fillMaxSize()) {
+            // Elegant Breadcrumbs and Back Button Header
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                IconButton(
+                    onClick = { viewModel.selectFolder(0L) }, // Return to root directory
+                    modifier = Modifier.size(36.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.ArrowBack,
+                        contentDescription = "Back",
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
 
-                        LinkItemCard(
-                            link = link,
-                            folderName = folderLabel,
-                            onOpenLink = { target -> openBrowser(context, target.url) },
-                            onCopyLink = { target ->
-                                clipboardManager.setText(AnnotatedString(target.url))
-                                Toast.makeText(context, "已複製 URL 連結 📋", Toast.LENGTH_SHORT).show()
-                            },
-                            onEditLink = onEditLink,
-                            onDeleteLink = onDeleteLink
+                Spacer(modifier = Modifier.width(8.dp))
+
+                // Computer breadcrumb directory visual
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clip(shape8)
+                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f))
+                        .padding(horizontal = 10.dp, vertical = 6.dp)
+                ) {
+                    Text(
+                        text = "根目錄 ➔ ${currentFolder?.name ?: "無分類"}",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.secondary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(4.dp))
+
+            if (!isCurrentFolderLockedAndNotAuth) {
+                // Search Bar specifically in folders tab to find folder items
+                OutlinedTextField(
+                    value = searchQuery,
+                    onValueChange = onSearchQueryChange,
+                    placeholder = { Text("搜尋此資料夾內的連結...") },
+                    leadingIcon = {
+                        Icon(
+                            imageVector = Icons.Default.Search,
+                            contentDescription = "Search icon"
                         )
+                    },
+                    trailingIcon = {
+                        if (searchQuery.isNotEmpty()) {
+                            IconButton(onClick = { onSearchQueryChange("") }) {
+                                Icon(
+                                    imageVector = Icons.Default.Clear,
+                                    contentDescription = "Clear search"
+                                )
+                            }
+                        }
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp)
+                        .testTag("search_field_folder"),
+                    shape = shape16,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedContainerColor = MaterialTheme.colorScheme.surface,
+                        unfocusedContainerColor = MaterialTheme.colorScheme.surface,
+                        focusedBorderColor = MaterialTheme.colorScheme.primary,
+                        unfocusedBorderColor = MaterialTheme.colorScheme.surfaceVariant
+                    ),
+                    singleLine = true
+                )
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                // Tag Slider (Only show tags active under current folder)
+                if (folderTags.isNotEmpty()) {
+                    LazyRow(
+                        contentPadding = PaddingValues(horizontal = 16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        item {
+                            FilterChip(
+                                selected = selectedTag == null,
+                                onClick = { viewModel.selectTag(null) },
+                                label = { Text("全部標籤") },
+                                shape = shape12
+                            )
+                        }
+
+                        items(folderTags) { tag ->
+                            FilterChip(
+                                selected = selectedTag == tag,
+                                onClick = { viewModel.selectTag(tag) },
+                                label = { Text("# $tag") },
+                                shape = shape12,
+                                colors = FilterChipDefaults.filterChipColors(
+                                    selectedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
+                                    selectedLabelColor = MaterialTheme.colorScheme.primary
+                                )
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                }
+
+                HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+            }
+
+            // Main display body
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .weight(1f)
+            ) {
+                if (isCurrentFolderLockedAndNotAuth) {
+                    LockedFolderMessage(
+                        folderName = currentFolder?.name ?: "已加密資料夾",
+                        onUnlockClicked = {
+                            onUnlockRequest(
+                                currentFolder?.id ?: 0L,
+                                currentFolder?.name ?: "已加密資料夾",
+                                currentFolder?.lockType ?: "PIN",
+                                currentFolder?.lockValue ?: ""
+                            )
+                        },
+                        onBackClicked = { viewModel.selectFolder(0L) }
+                    )
+                } else if (links.isEmpty()) {
+                    EmptyLinksState(
+                        isSearchResult = searchQuery.isNotEmpty() || selectedTag != null,
+                        onCreateClicked = onAddLinkClick
+                    )
+                } else {
+                    LazyColumn(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .testTag("links_list"),
+                        contentPadding = PaddingValues(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        items(links, key = { it.id }) { link ->
+                            val folderObj = folders.find { it.id == link.folderId }
+                            val folderLabel = folderObj?.name ?: "無分類"
+
+                            LinkItemCard(
+                                link = link,
+                                folderName = folderLabel,
+                                onOpenLink = { target -> openBrowser(context, target.url) },
+                                onCopyLink = { target ->
+                                    clipboardManager.setText(AnnotatedString(target.url))
+                                    Toast.makeText(context, "已複製 URL 連結 📋", Toast.LENGTH_SHORT).show()
+                                },
+                                onEditLink = onEditLink,
+                                onDeleteLink = onDeleteLink,
+                                useRoundedCorners = useRoundedCorners
+                            )
+                        }
                     }
                 }
             }
@@ -1713,16 +1782,12 @@ fun TagsTabContent(
     onEditLink: (LinkEntity) -> Unit,
     onDeleteLink: (LinkEntity) -> Unit
 ) {
-    // Gather all unique tags from all links
-    val allUniqueTags = remember(allLinks) {
-        allLinks.flatMap { link ->
-            link.tags.split(",")
-                .map { it.trim() }
-                .filter { it.isNotEmpty() }
-        }.distinct().sorted()
-    }
+    // Persistent tags collected from ViewModel state flow of the database table
+    val allUniqueTags by viewModel.allTags.collectAsStateWithLifecycle()
+    val useRoundedCorners by viewModel.useRoundedCorners.collectAsStateWithLifecycle()
 
     var activeTagSelected by remember { mutableStateOf<String?>(null) }
+    var showAddTagDialog by remember { mutableStateOf(false) }
 
     // Initialize select first tag if nothing selected and tags are available
     LaunchedEffect(allUniqueTags) {
@@ -1748,22 +1813,32 @@ fun TagsTabContent(
     ) {
         Spacer(modifier = Modifier.height(8.dp))
 
-        Text(
-            text = "TAG MATRIX 標籤庫",
-            fontWeight = FontWeight.Bold,
-            fontSize = 11.sp,
-            color = MaterialTheme.colorScheme.secondary,
-            letterSpacing = 1.sp
-        )
-        Text(
-            text = "多維度標籤聚合檢索",
-            fontSize = 15.sp,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.onBackground,
-            modifier = Modifier.padding(vertical = 4.dp)
-        )
+        // Header with dynamic Add Tag capability
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "點選要檢索的標籤分類：",
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Medium,
+                color = MaterialTheme.colorScheme.secondary
+            )
 
-        Spacer(modifier = Modifier.height(10.dp))
+            TextButton(
+                onClick = { showAddTagDialog = true },
+                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Add,
+                    contentDescription = "Add tag",
+                    modifier = Modifier.size(14.dp)
+                )
+                Spacer(modifier = Modifier.width(4.dp))
+                Text("新增標籤", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+            }
+        }
 
         if (allUniqueTags.isEmpty()) {
             Box(
@@ -1773,7 +1848,7 @@ fun TagsTabContent(
                 contentAlignment = Alignment.Center
             ) {
                 Text(
-                    text = "目前無任何自訂標籤，可以在新增或編輯連結時設定標籤庫🏷️",
+                    text = "目前無任何自訂標籤，點擊右上角新增標籤，或在新增或編輯連結時設定標籤庫🏷️",
                     fontSize = 13.sp,
                     color = MaterialTheme.colorScheme.outline,
                     textAlign = TextAlign.Center,
@@ -1781,43 +1856,43 @@ fun TagsTabContent(
                 )
             }
         } else {
-            // FlowRow of Tags
-            Text(
-                text = "點選要檢索的標籤分類：",
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Medium,
-                color = MaterialTheme.colorScheme.secondary,
-                modifier = Modifier.padding(bottom = 6.dp)
-            )
-
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                verticalArrangement = Arrangement.spacedBy(6.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 12.dp)
-            ) {
-                allUniqueTags.forEach { tag ->
-                    val isSelected = activeTagSelected == tag
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(10.dp))
-                            .background(
-                                if (isSelected) MaterialTheme.colorScheme.primary
-                                else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
+            // LazyHorizontalGrid with exactly 3 Rows, horizontally scrollable
+            Box(modifier = Modifier.height(110.dp)) {
+                LazyHorizontalGrid(
+                    rows = GridCells.Fixed(3),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(end = 16.dp)
+                ) {
+                    items(allUniqueTags) { tag ->
+                        val isSelected = activeTagSelected == tag
+                        val shape = if (useRoundedCorners) RoundedCornerShape(10.dp) else RoundedCornerShape(0.dp)
+                        Box(
+                            modifier = Modifier
+                                .clip(shape)
+                                .background(
+                                    if (isSelected) MaterialTheme.colorScheme.primary
+                                    else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
+                                )
+                                .clickable { activeTagSelected = tag }
+                                .padding(horizontal = 14.dp, vertical = 6.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "#$tag",
+                                fontSize = 11.sp,
+                                color = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
-                            .clickable { activeTagSelected = tag }
-                            .padding(horizontal = 10.dp, vertical = 6.dp)
-                    ) {
-                        Text(
-                            text = "#$tag",
-                            fontSize = 11.sp,
-                            color = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
-                            fontWeight = FontWeight.Bold
-                        )
+                        }
                     }
                 }
             }
+
+            Spacer(modifier = Modifier.height(12.dp))
 
             HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
 
@@ -1845,6 +1920,7 @@ fun TagsTabContent(
                             val isUnlocked = unlockedFolderIds.contains(link.folderId)
 
                             if (isFolderLocked && !isUnlocked) {
+                                val shape = if (useRoundedCorners) RoundedCornerShape(16.dp) else RoundedCornerShape(0.dp)
                                 Card(
                                     modifier = Modifier
                                         .fillMaxWidth()
@@ -1853,8 +1929,8 @@ fun TagsTabContent(
                                                 onUnlockRequest(it.id, it.name, it.lockType, it.lockValue)
                                             }
                                         }
-                                        .border(1.dp, MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(16.dp)),
-                                    shape = RoundedCornerShape(16.dp),
+                                        .border(1.dp, MaterialTheme.colorScheme.surfaceVariant, shape),
+                                    shape = shape,
                                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
                                 ) {
                                     Row(
@@ -1883,7 +1959,7 @@ fun TagsTabContent(
                                     }
                                 }
                             } else {
-                                val folderLabel = folderObj?.name ?: "未分類"
+                                val folderLabel = folderObj?.name ?: "無分類"
                                 LinkItemCard(
                                     link = link,
                                     folderName = folderLabel,
@@ -1893,9 +1969,78 @@ fun TagsTabContent(
                                         Toast.makeText(context, "已複製 URL 連結 📋", Toast.LENGTH_SHORT).show()
                                     },
                                     onEditLink = onEditLink,
-                                    onDeleteLink = onDeleteLink
+                                    onDeleteLink = onDeleteLink,
+                                    useRoundedCorners = useRoundedCorners
                                 )
                             }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Dynamic Add Tag Dialog
+    if (showAddTagDialog) {
+        var tagNameInput by remember { mutableStateOf("") }
+        val shape = if (useRoundedCorners) RoundedCornerShape(20.dp) else RoundedCornerShape(0.dp)
+        val buttonShape = if (useRoundedCorners) RoundedCornerShape(12.dp) else RoundedCornerShape(0.dp)
+
+        Dialog(onDismissRequest = { showAddTagDialog = false }) {
+            Card(
+                shape = shape,
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp)
+                    .border(1.dp, MaterialTheme.colorScheme.surfaceVariant, shape)
+            ) {
+                Column(
+                    modifier = Modifier.padding(24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        text = "新增標籤",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    OutlinedTextField(
+                        value = tagNameInput,
+                        onValueChange = { tagNameInput = it },
+                        label = { Text("標籤名稱") },
+                        placeholder = { Text("例如：工作、私房、AI") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = if (useRoundedCorners) RoundedCornerShape(12.dp) else RoundedCornerShape(0.dp)
+                    )
+
+                    Spacer(modifier = Modifier.height(24.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End
+                    ) {
+                        TextButton(onClick = { showAddTagDialog = false }) {
+                            Text("取消")
+                        }
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Button(
+                            onClick = {
+                                if (tagNameInput.isNotBlank()) {
+                                    val trimmed = tagNameInput.trim()
+                                    viewModel.insertTag(trimmed)
+                                    activeTagSelected = trimmed
+                                    Toast.makeText(context, "標籤 #$trimmed 已新增", Toast.LENGTH_SHORT).show()
+                                }
+                                showAddTagDialog = false
+                            },
+                            shape = buttonShape
+                        ) {
+                            Text("確認新增")
                         }
                     }
                 }
@@ -1906,10 +2051,17 @@ fun TagsTabContent(
 
 @Composable
 fun SettingsTabContent(
+    viewModel: LinkViewModel,
     unlockedFolderIds: Set<Long>,
     onLockAllFolders: () -> Unit,
+    onGenerateTestData: () -> Unit,
     context: Context
 ) {
+    val useRoundedOnApp by viewModel.useRoundedCorners.collectAsStateWithLifecycle()
+    val showFoldersSetting by viewModel.showFoldersTab.collectAsStateWithLifecycle()
+    val showTagsSetting by viewModel.showTagsTab.collectAsStateWithLifecycle()
+    val baseShape = if (useRoundedOnApp) RoundedCornerShape(20.dp) else RoundedCornerShape(0.dp)
+ 
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
@@ -1917,42 +2069,173 @@ fun SettingsTabContent(
         contentPadding = PaddingValues(vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        item {
-            Text(
-                text = "SYSTEM SETTINGS",
-                fontWeight = FontWeight.Bold,
-                fontSize = 11.sp,
-                color = MaterialTheme.colorScheme.secondary,
-                letterSpacing = 1.sp
-            )
-            Text(
-                text = "LinkVault 系統設定與美學說明",
-                fontSize = 15.sp,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onBackground,
-                modifier = Modifier.padding(vertical = 4.dp)
-            )
-        }
-
-        // 2. Security reset controller
+        // 1. Angle shape design style changer (Replaces the private/security protector card!)
         item {
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .border(1.dp, MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(20.dp)),
-                shape = RoundedCornerShape(20.dp),
+                    .border(1.dp, MaterialTheme.colorScheme.surfaceVariant, baseShape),
+                shape = baseShape,
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
             ) {
                 Column(modifier = Modifier.padding(18.dp)) {
                     Text(
-                        text = "🔐 安全隱私保護設定",
+                        text = "📐 頁面編角視覺設計 (Interface Corner Style)",
                         fontWeight = FontWeight.Bold,
                         fontSize = 14.sp,
                         color = MaterialTheme.colorScheme.onSurface
                     )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "切換應用程式中所有按鈕、超連結卡片和對話視窗的外觀邊角風格，隨心打造最愛的美感。",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.secondary,
+                        lineHeight = 18.sp
+                    )
+                    Spacer(modifier = Modifier.height(14.dp))
+ 
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Button(
+                            onClick = { viewModel.setRoundedCorners(true) },
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(12.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = if (useRoundedOnApp) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                                contentColor = if (useRoundedOnApp) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        ) {
+                            Text("圓滑設計", fontWeight = FontWeight.Bold)
+                        }
+
+                        Button(
+                            onClick = { viewModel.setRoundedCorners(false) },
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(0.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = if (!useRoundedOnApp) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                                contentColor = if (!useRoundedOnApp) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        ) {
+                            Text("直角設計", fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+            }
+        }
+
+        // 1.5. Navigation Tabs Visibility Settings
+        item {
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .border(1.dp, MaterialTheme.colorScheme.surfaceVariant, baseShape),
+                shape = baseShape,
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+            ) {
+                Column(modifier = Modifier.padding(18.dp)) {
+                    Text(
+                        text = "📋 導覽分頁顯示設定 (Navigation Tab Visibility)",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 14.sp,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "自訂底部導覽列中「資料夾」與「標籤」分頁的顯示狀態。",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.secondary,
+                        lineHeight = 18.sp
+                    )
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { viewModel.setShowFoldersTab(!showFoldersSetting) }
+                            .padding(vertical = 4.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "顯示資料夾分頁",
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                text = "關閉後將不顯示下方「資料夾」選項",
+                                fontSize = 11.sp,
+                                color = MaterialTheme.colorScheme.outline
+                            )
+                        }
+                        Switch(
+                            checked = showFoldersSetting,
+                            onCheckedChange = { viewModel.setShowFoldersTab(it) }
+                        )
+                    }
+
+                    HorizontalDivider(
+                        modifier = Modifier.padding(vertical = 8.dp),
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                    )
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { viewModel.setShowTagsTab(!showTagsSetting) }
+                            .padding(vertical = 4.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "顯示標籤分頁",
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                text = "關閉後將不顯示下方「標籤」選項",
+                                fontSize = 11.sp,
+                                color = MaterialTheme.colorScheme.outline
+                            )
+                        }
+                        Switch(
+                            checked = showTagsSetting,
+                            onCheckedChange = { viewModel.setShowTagsTab(it) }
+                        )
+                    }
+                }
+            }
+        }
+
+        // 2. Developer Mode section
+        item {
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.2f), baseShape),
+                shape = baseShape,
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.1f)
+                )
+            ) {
+                Column(modifier = Modifier.padding(18.dp)) {
+                    Text(
+                        text = "🛠️ 開發者測試模式 (Developer Mode)",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 14.sp,
+                        color = MaterialTheme.colorScheme.primary
+                    )
                     Spacer(modifier = Modifier.height(6.dp))
                     Text(
-                        text = "您可以在【資料夾】頁籤上，長按任何歸屬分類資料夾，自訂四位數密碼(PIN)或是極簡圖形鎖扣。受鎖定保護的資料夾連結，在進行安全解鎖驗證之前，均不會暴露於【最近新增】及【標籤】檢索視窗中，高規格防護，保障個人隱私軌跡。",
+                        text = "點擊下方按鈕將清理目前的資料庫，並為您一鍵生成內含多個安全防護、各類標籤與自訂筆記的分類測試資料，以供功能及視覺效果之展示。",
                         fontSize = 12.sp,
                         color = MaterialTheme.colorScheme.secondary,
                         lineHeight = 18.sp
@@ -1961,20 +2244,17 @@ fun SettingsTabContent(
                     Spacer(modifier = Modifier.height(14.dp))
 
                     Button(
-                        onClick = {
-                            if (unlockedFolderIds.isEmpty()) {
-                                Toast.makeText(context, "所有加密資料夾目前皆處於安全上鎖狀態！🔒", Toast.LENGTH_SHORT).show()
-                            } else {
-                                onLockAllFolders()
-                            }
-                        },
-                        shape = RoundedCornerShape(12.dp),
-                        modifier = Modifier.fillMaxWidth()
+                        onClick = onGenerateTestData,
+                        shape = if (useRoundedOnApp) RoundedCornerShape(12.dp) else RoundedCornerShape(0.dp),
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.primary
+                        )
                     ) {
-                        Icon(imageVector = Icons.Default.Lock, contentDescription = "Lock all")
+                        Icon(imageVector = Icons.Default.Build, contentDescription = "Generate mock data")
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
-                            text = if (unlockedFolderIds.isNotEmpty()) "立刻一鍵重新上鎖 ${unlockedFolderIds.size} 個資料夾" else "所有資料夾目前皆處於安全上鎖狀態 🔒",
+                            text = "一鍵快速生成測試資料",
                             fontWeight = FontWeight.Bold
                         )
                     }
@@ -1987,8 +2267,8 @@ fun SettingsTabContent(
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .border(1.dp, MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(20.dp)),
-                shape = RoundedCornerShape(20.dp),
+                    .border(1.dp, MaterialTheme.colorScheme.surfaceVariant, baseShape),
+                shape = baseShape,
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
             ) {
                 Column(modifier = Modifier.padding(18.dp)) {

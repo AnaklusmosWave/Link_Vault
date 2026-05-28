@@ -13,6 +13,7 @@ import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -269,6 +270,7 @@ fun LockUnlockDialog(
     var tries by remember { mutableStateOf(0) }
     var feedbackMessage by remember { mutableStateOf("請輸入此資料夾的密碼以解鎖") }
     var isError by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
 
     Dialog(onDismissRequest = onDismiss) {
         Card(
@@ -350,13 +352,19 @@ fun LockUnlockDialog(
                                 if (nextPin.length == 4) {
                                     if (nextPin == lockValue) {
                                         feedbackMessage = "密碼正確，正在解鎖！"
-                                        onUnlockSuccess()
-                                        onDismiss()
+                                        scope.launch {
+                                            kotlinx.coroutines.delay(250)
+                                            onUnlockSuccess()
+                                            onDismiss()
+                                        }
                                     } else {
-                                        tries++
-                                        isError = true
-                                        enteredPin = ""
-                                        feedbackMessage = "密碼錯誤！請再試一次"
+                                        scope.launch {
+                                            kotlinx.coroutines.delay(250)
+                                            tries++
+                                            isError = true
+                                            enteredPin = ""
+                                            feedbackMessage = "密碼錯誤！請再試一次"
+                                        }
                                     }
                                 }
                             }

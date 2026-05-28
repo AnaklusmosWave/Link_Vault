@@ -8,14 +8,38 @@ import com.example.data.AppDatabase
 import com.example.data.FolderEntity
 import com.example.data.LinkEntity
 import com.example.data.LinkRepository
+import com.example.data.TagEntity
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
-class LinkViewModel(private val repository: LinkRepository) : ViewModel() {
+class LinkViewModel(private val repository: LinkRepository, private val context: Context) : ViewModel() {
+
+    private val prefs = context.getSharedPreferences("app_settings", Context.MODE_PRIVATE)
+
+    val useRoundedCorners = MutableStateFlow(prefs.getBoolean("use_rounded_corners", true))
+    val showFoldersTab = MutableStateFlow(prefs.getBoolean("show_folders_tab", true))
+    val showTagsTab = MutableStateFlow(prefs.getBoolean("show_tags_tab", true))
+
+    fun setRoundedCorners(enabled: Boolean) {
+        useRoundedCorners.value = enabled
+        prefs.edit().putBoolean("use_rounded_corners", enabled).apply()
+    }
+
+    fun setShowFoldersTab(enabled: Boolean) {
+        showFoldersTab.value = enabled
+        prefs.edit().putBoolean("show_folders_tab", enabled).apply()
+    }
+
+    fun setShowTagsTab(enabled: Boolean) {
+        showTagsTab.value = enabled
+        prefs.edit().putBoolean("show_tags_tab", enabled).apply()
+    }
 
     val folders: StateFlow<List<FolderEntity>> = repository.allFolders
         .stateIn(
@@ -79,40 +103,44 @@ class LinkViewModel(private val repository: LinkRepository) : ViewModel() {
         initialValue = emptyList()
     )
 
-    // Dynamic tag list computed from ALL links or current visible links
-    val allTags: StateFlow<List<String>> = allLinks
-        .combine(selectedFolderId) { links, folderId ->
-            val applicableLinks = if (folderId != 0L) {
-                links.filter { it.folderId == folderId }
-            } else {
-                links
-            }
-            applicableLinks.flatMap { link ->
-                link.tags.split(",")
-                    .map { it.trim() }
-                    .filter { it.isNotEmpty() }
-            }.distinct().sorted()
-        }.stateIn(
+    // Persistent tag list from database Tag table
+    val allTags: StateFlow<List<String>> = repository.allTags
+        .map { tagEntities ->
+            tagEntities.map { it.name }.distinct().sorted()
+        }
+        .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = emptyList()
         )
 
     init {
-        // Initialize default data if DB is empty
+        // Initialize default data if DB is empty or ensure '無分類' is present once on app startup
         viewModelScope.launch {
-            repository.allFolders.collect { list ->
-                if (list.isEmpty()) {
-                    setupInitialData()
+            val list = repository.allFolders.first()
+            if (list.isEmpty()) {
+                setupInitialData()
+            } else {
+                if (list.none { it.name == "無分類" }) {
+                    repository.insertFolder(FolderEntity(name = "無分類", isLocked = false))
                 }
             }
         }
     }
 
     private suspend fun setupInitialData() {
+        // Pre-insert default tags so they are always in the database
+        val defaultTagsList = listOf(
+            "coding", "android", "dev", "compose", "learn",
+            "ui", "design", "icon", "money", "finance", "stock"
+        )
+        defaultTagsList.forEach { tagName ->
+            repository.insertTag(TagEntity(name = tagName))
+        }
+
         // Create pre-set folders
         val uncategorizedId = repository.insertFolder(
-            FolderEntity(name = "📂 無分類", isLocked = false)
+            FolderEntity(name = "無分類", isLocked = false)
         )
         val workId = repository.insertFolder(
             FolderEntity(name = "🏢 工作專案", isLocked = false)
@@ -233,18 +261,127 @@ class LinkViewModel(private val repository: LinkRepository) : ViewModel() {
                     tags = tags
                 )
             )
+            // Save tags to avoid deletion
+            tags.split(",")
+                .map { it.trim() }
+                .filter { it.isNotEmpty() }
+                .forEach { tag ->
+                    repository.insertTag(TagEntity(name = tag))
+                }
         }
     }
 
     fun updateLink(link: LinkEntity) {
         viewModelScope.launch {
             repository.updateLink(link)
+            // Save tags to avoid deletion
+            link.tags.split(",")
+                .map { it.trim() }
+                .filter { it.isNotEmpty() }
+                .forEach { tag ->
+                    repository.insertTag(TagEntity(name = tag))
+                }
         }
     }
 
     fun deleteLink(link: LinkEntity) {
         viewModelScope.launch {
             repository.deleteLink(link)
+        }
+    }
+
+    fun generateTestData() {
+        viewModelScope.launch {
+            repository.clearAllData()
+
+            // Pre-seed diverse popular tags
+            val tagList = listOf(
+                "AI", "Android", "Design", "Finance", "News", "Shopping", "Tech", "Work", "Life", "Idea"
+            )
+            tagList.forEach { tag ->
+                repository.insertTag(TagEntity(name = tag))
+            }
+
+            // Create custom folders
+            val uncategorizedId = repository.insertFolder(FolderEntity(name = "無分類", isLocked = false))
+            val techId = repository.insertFolder(FolderEntity(name = "💻 技術研討", isLocked = false))
+            val designId = repository.insertFolder(FolderEntity(name = "🎨 設計靈感", isLocked = false))
+            val lifeId = repository.insertFolder(FolderEntity(name = "🏠 日常生活", isLocked = false))
+            val secretFinanceId = repository.insertFolder(FolderEntity(
+                name = "🔒 機密財經",
+                isLocked = true,
+                lockType = "PIN",
+                lockValue = "9999"
+            ))
+
+            // Insert matching links with high quality notes and descriptive tags
+            repository.insertLink(LinkEntity(
+                folderId = techId,
+                title = "Google AI Studio",
+                url = "https://ai.google.dev/aistudio",
+                note = "★ AI 助理及原型設計入口",
+                tags = "AI,Tech"
+            ))
+            repository.insertLink(LinkEntity(
+                folderId = techId,
+                title = "Kotlin Coding Lang",
+                url = "https://kotlinlang.org",
+                note = "⏳ 電腦程式語言官方網站",
+                tags = "Android,Tech"
+            ))
+            repository.insertLink(LinkEntity(
+                folderId = designId,
+                title = "Material 3 Guideline",
+                url = "https://m3.material.io",
+                note = "💡 最齊全的 UI 排版色彩規格",
+                tags = "Design,Tech"
+            ))
+            repository.insertLink(LinkEntity(
+                folderId = designId,
+                title = "Dribbble Design Hub",
+                url = "https://dribbble.com",
+                note = "🎨 優質網頁及行動端靈感集散地",
+                tags = "Design,Idea"
+            ))
+            repository.insertLink(LinkEntity(
+                folderId = lifeId,
+                title = "Yahoo 奇摩新聞",
+                url = "https://tw.news.yahoo.com",
+                note = "🏠 每日焦點時事快報",
+                tags = "News,Life"
+            ))
+            repository.insertLink(LinkEntity(
+                folderId = lifeId,
+                title = "PChome 24h 購物",
+                url = "https://shopping.pchome.com.tw",
+                note = "🛍️ 買 3C 及日用品專用口袋",
+                tags = "Shopping,Life"
+            ))
+            repository.insertLink(LinkEntity(
+                folderId = secretFinanceId,
+                title = "Yahoo 股市個股",
+                url = "https://tw.stock.yahoo.com",
+                note = "📈 個人投資追蹤",
+                tags = "Finance"
+            ))
+            repository.insertLink(LinkEntity(
+                folderId = uncategorizedId,
+                title = "GitHub Portfolios",
+                url = "https://github.com",
+                note = "💼 個人履歷與專案雲端備份",
+                tags = "Work,Tech"
+            ))
+
+            selectFolder(0L) // Refresh back to root folder list
+        }
+    }
+
+    fun insertTag(name: String) {
+        viewModelScope.launch {
+            if (name.isNotBlank()) {
+                val trimmed = name.trim()
+                repository.insertTag(TagEntity(name = trimmed))
+            }
         }
     }
 }
@@ -256,7 +393,7 @@ class ViewModelFactory(private val context: Context) : ViewModelProvider.Factory
             val db = AppDatabase.getDatabase(context)
             val repository = LinkRepository(db.linkDao())
             @Suppress("UNCHECKED_CAST")
-            return LinkViewModel(repository) as T
+            return LinkViewModel(repository, context) as T
         }
         throw IllegalArgumentException("Unknown ViewModel class")
     }
